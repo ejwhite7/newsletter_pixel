@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/pixel.js": {
+      "maxDuration": 10
+    }
+  }
+}

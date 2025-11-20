@@ -1,0 +1,38 @@
+{
+  "name": "newsletter-pixel",
+  "version": "1.0.0",
+  "description": "A simple, privacy-focused email tracking pixel service that forwards email open events to PostHog or any webhook endpoint",
+  "main": "api/pixel.js",
+  "keywords": [
+    "newsletter",
+    "email",
+    "tracking",
+    "pixel",
+    "posthog",
+    "webhook",
+    "analytics",
+    "beehiiv",
+    "mailchimp",
+    "convertkit"
+  ],
+  "homepage": "https://github.com/YOUR-USERNAME/newsletter-pixel#readme",
+  "bugs": {
+    "url": "https://github.com/YOUR-USERNAME/newsletter-pixel/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR-USERNAME/newsletter-pixel.git"
+  },
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
+    "test": "node test.js"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": "22.x"
+  }
+}
