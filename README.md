@@ -2,6 +2,27 @@
 
 A simple, privacy-focused email tracking pixel service that forwards email open events to PostHog or any webhook endpoint. Perfect for tracking newsletter engagement without vendor lock-in.
 
+## Why Track Email Opens?
+
+By tracking which subscribers are opening your emails, you can:
+
+- **Assess subscriber value** - Identify your most engaged readers who consistently open emails
+- **Improve targeting** - Send special content or offers to highly engaged subscribers
+- **Clean your list** - Remove inactive subscribers to improve deliverability rates
+- **Optimize send times** - Analyze when your most valuable subscribers are most active
+- **Measure content performance** - See which newsletter topics drive the highest engagement
+- **Segment audiences** - Create cohorts based on engagement patterns for personalized campaigns
+
+Understanding subscriber engagement helps you focus on readers who find real value in your content, leading to better retention and monetization opportunities.
+
+**Break free from platform lock-in**: While email platforms provide basic open tracking, this critical engagement data is typically locked inside their systems. By tracking opens in PostHog, you can:
+
+- **Export to CRM systems** - Sync engaged subscriber lists to HubSpot, Salesforce, or other CRMs
+- **Power ad platforms** - Create lookalike audiences on Facebook, Google Ads based on engaged subscribers
+- **Feed analytics tools** - Combine email engagement with website analytics for complete customer journey tracking
+- **Build custom audiences** - Use engagement data in any third-party tool that accepts PostHog data
+- **Own your data** - Never lose access to subscriber engagement history if you switch email platforms
+
 ## Features
 
 - 🎯 **1x1 transparent tracking pixel** - Invisible in emails
@@ -15,7 +36,7 @@ A simple, privacy-focused email tracking pixel service that forwards email open 
 
 ### 1. Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR-USERNAME/newsletter-pixel)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ejwhite7/newsletter_pixel)
 
 Or manually:
 
@@ -46,10 +67,10 @@ Add this HTML to your email template:
 
 ### Beehiiv
 
-Use these merge tags in your HTML snippet:
+Use these merge tags in your HTML snippet. Add this as an HTML Snippet in beehiiv with visibility set to "Hide on Desktop" to prevent it from appearing in web posts:
 
 ```html
-<img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email={{email}}&subscriber_id={{subscriber_id}}&post_id={{post_id}}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
+<img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email={{email}}&subscriber_id={{subscriber_id}}&post_id={{resource_id}}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
 ```
 
 ### Mailchimp
@@ -70,22 +91,23 @@ In your PostHog webhook settings, use these event properties:
 
 ```json
 {
+  "event": "beehiiv.email_opened",
+  "distinct_id": "{request.body.subscriber_id}",
   "$lib": "newsletter-pixel",
-  "$source_url": "email",
-  "event": "email_opened",
-  "email": "{body.email}",
-  "subscriber_id": "{body.subscriber_id}",
-  "post_id": "{body.post_id}",
-  "timestamp": "{body.timestamp}",
-  "user_agent": "{body.user_agent}",
-  "ip_address": "{body.ip_address}",
   "$set": {
-    "email": "{body.email}",
-    "subscriber_id": "{body.subscriber_id}"
+    "email": "{request.body.email}",
+    "subscriber_id": "{request.body.subscriber_id}"
   },
+  "email": "{request.body.email}",
+  "post_id": "{request.body.post_id}",
   "$set_once": {
-    "first_email_open": "{body.timestamp}"
-  }
+    "first_email_open": "{request.body.timestamp}"
+  },
+  "timestamp": "{request.body.timestamp}",
+  "ip_address": "{request.body.ip_address}",
+  "user_agent": "{request.body.user_agent}",
+  "$source_url": "email",
+  "subscriber_id": "{request.body.subscriber_id}"
 }
 ```
 
