@@ -49,11 +49,14 @@ vercel --prod
 
 ### 2. Configure Your Webhook
 
-Edit `api/pixel.js` and update the webhook URL:
+Set the `POSTHOG_WEBHOOK_URL` environment variable in your Vercel dashboard:
 
-```javascript
-const POSTHOG_WEBHOOK = 'https://webhooks.us.posthog.com/public/webhooks/YOUR-WEBHOOK-ID';
-```
+1. Go to your Vercel project → Settings → Environment Variables
+2. Add `POSTHOG_WEBHOOK_URL` with your PostHog webhook URL:
+   ```
+   https://webhooks.us.posthog.com/public/webhooks/YOUR-WEBHOOK-ID
+   ```
+3. Redeploy for changes to take effect
 
 ### 3. Add to Your Newsletter
 
@@ -152,11 +155,13 @@ body: JSON.stringify({
 
 ### Environment Variables
 
-For multiple environments or sensitive config, use Vercel environment variables:
+The following environment variable is **required**:
 
-```javascript
-const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://default-webhook.com';
-```
+| Variable | Description |
+|----------|-------------|
+| `POSTHOG_WEBHOOK_URL` | Your PostHog webhook endpoint URL |
+
+Set this in Vercel's dashboard under Settings → Environment Variables.
 
 ## Privacy & GDPR
 
