@@ -2,6 +2,9 @@
   "functions": {
     "api/pixel.js": {
       "maxDuration": 10
+    },
+    "api/bot-trap.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [

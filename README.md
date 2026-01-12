@@ -31,6 +31,7 @@ Understanding subscriber engagement helps you focus on readers who find real val
 - 🔧 **Newsletter platform agnostic** - Works with any email service
 - 📧 **Beehiiv ready** - Pre-configured merge tags
 - ⚡ **Fast response** - Returns pixel immediately, processes webhook async
+- 🤖 **Bot detection honeypot** - Identify and filter out bot clicks from analytics
 
 ## Quick Start
 
@@ -88,6 +89,44 @@ Use these merge tags in your HTML snippet. Add this as an HTML Snippet in beehii
 <img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email={{ subscriber.email_address }}&subscriber_id={{ subscriber.id }}&post_id={{ broadcast.id }}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
 ```
 
+## Bot Detection Honeypot
+
+Many email security scanners and bots automatically click every link in an email before delivering it. This inflates your analytics with fake engagement. The honeypot endpoint catches these bots by using an invisible link that real users cannot see or click.
+
+### How It Works
+
+1. Add an invisible link to your email template pointing to `/api/bot-trap`
+2. Real users never see or click it (it's hidden with CSS)
+3. Bots programmed to click all links will trigger the trap
+4. The endpoint sends a `bot_trap_triggered` event to PostHog with `is_bot: true`
+5. Filter these subscribers from your analytics to get accurate engagement data
+
+### Adding the Honeypot Link
+
+Add this invisible link to your email template alongside your tracking pixel:
+
+**Beehiiv:**
+```html
+<a href="https://YOUR-DEPLOYMENT-URL.vercel.app/api/bot-trap?email={{email}}&subscriber_id={{subscriber_id}}&post_id={{resource_id}}" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
+```
+
+**Mailchimp:**
+```html
+<a href="https://YOUR-DEPLOYMENT-URL.vercel.app/api/bot-trap?email=*|EMAIL|*&subscriber_id=*|UNIQID|*&post_id=*|CAMPAIGN_UID|*" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
+```
+
+**ConvertKit:**
+```html
+<a href="https://YOUR-DEPLOYMENT-URL.vercel.app/api/bot-trap?email={{ subscriber.email_address }}&subscriber_id={{ subscriber.id }}&post_id={{ broadcast.id }}" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
+```
+
+### Best Practices
+
+- Use boring text like "Verify subscription" that bots targeting verification links will click
+- Never use text like "Don't click this" - curious humans might click it
+- Test in Gmail, Outlook, and Apple Mail to ensure the link is truly invisible
+- Place the link early in the email (bots often process links in order)
+
 ## PostHog Webhook Configuration
 
 In your PostHog webhook settings, use these event properties:
@@ -113,6 +152,45 @@ In your PostHog webhook settings, use these event properties:
   "subscriber_id": "{request.body.subscriber_id}"
 }
 ```
+
+### Bot Trap Webhook Configuration
+
+Create a **separate webhook** in PostHog for the bot trap events. This marks individual events (not users) as bot activity:
+
+```json
+{
+  "event": "bot_trap_triggered",
+  "distinct_id": "{request.body.subscriber_id}",
+  "$lib": "newsletter-pixel",
+  "email": "{request.body.email}",
+  "post_id": "{request.body.post_id}",
+  "timestamp": "{request.body.timestamp}",
+  "ip_address": "{request.body.ip_address}",
+  "user_agent": "{request.body.user_agent}",
+  "is_bot": true,
+  "bot_session_ip": "{request.body.bot_session_ip}",
+  "bot_session_ua": "{request.body.bot_session_ua}",
+  "subscriber_id": "{request.body.subscriber_id}"
+}
+```
+
+Note: We intentionally do NOT use `$set` here. This keeps `is_bot` as an event property only, so legitimate opens from the same subscriber are still tracked normally.
+
+### Filtering Bots in PostHog
+
+Filter bot events from your analytics without excluding the entire subscriber:
+
+**In Insights/Dashboards:**
+- For email open events: No filter needed (bot trap uses a separate event name)
+- To explicitly exclude: Filter `event` → `does not equal` → `bot_trap_triggered`
+
+**Cross-referencing Bot Sessions:**
+The `bot_session_ip` and `bot_session_ua` properties let you identify if other events came from the same bot session. Create an insight to find email opens that share IP/user-agent with bot trap events.
+
+**Viewing Bot Activity:**
+Create a separate insight to monitor bot activity:
+- Filter: `event` → `equals` → `bot_trap_triggered`
+- This helps you understand how many bots are targeting your emails
 
 ## Data Captured
 
@@ -184,7 +262,15 @@ cd newsletter-pixel
 vercel dev
 ```
 
-Test locally at: `http://localhost:3000/api/pixel?email=test@example.com&subscriber_id=123&post_id=456`
+Test the tracking pixel locally:
+```
+http://localhost:3000/api/pixel?email=test@example.com&subscriber_id=123&post_id=456
+```
+
+Test the bot trap locally:
+```
+http://localhost:3000/api/bot-trap?email=test@example.com&subscriber_id=123&post_id=456
+```
 
 ## Contributing
 
