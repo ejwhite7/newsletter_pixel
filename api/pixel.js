@@ -22,6 +22,12 @@ function isValidEmailFormat(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 320;
 }
 
+// Validate UUID format (Beehiiv uses UUIDs for subscriber_id and post_id)
+function isValidUUID(str) {
+  if (!str || typeof str !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 export default async function handler(req, res) {
   // Only allow GET requests (standard for tracking pixels)
   if (req.method !== 'GET') {
@@ -48,8 +54,22 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Validate required fields - skip webhook if invalid (e.g., unprocessed merge tags)
+  if (!isValidEmailFormat(email)) {
+    console.warn('Invalid email format, skipping webhook:', email);
+    return;
+  }
+  if (!isValidUUID(subscriber_id)) {
+    console.warn('Invalid subscriber_id format, skipping webhook:', subscriber_id);
+    return;
+  }
+  if (!isValidUUID(post_id)) {
+    console.warn('Invalid post_id format, skipping webhook:', post_id);
+    return;
+  }
+
   // Sanitize inputs before sending to webhook
-  const sanitizedEmail = isValidEmailFormat(email) ? sanitizeInput(email, 320) : 'invalid';
+  const sanitizedEmail = sanitizeInput(email, 320);
   const sanitizedSubscriberId = sanitizeInput(subscriber_id, 100);
   const sanitizedPostId = sanitizeInput(post_id, 100);
 
