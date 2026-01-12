@@ -129,11 +129,16 @@ Add this invisible link to your email template alongside your tracking pixel:
 
 ## PostHog Webhook Configuration
 
-In your PostHog webhook settings, use these event properties:
+A single webhook handles both email opens and bot trap events. The `event_type` field differentiates them:
+
+- `email_opened` - From the tracking pixel
+- `bot_trap_triggered` - From the honeypot link
+
+In your PostHog webhook settings, use this configuration:
 
 ```json
 {
-  "event": "beehiiv.email_opened",
+  "event": "{request.body.event_type}",
   "distinct_id": "{request.body.subscriber_id}",
   "$lib": "newsletter-pixel",
   "$set": {
@@ -148,33 +153,17 @@ In your PostHog webhook settings, use these event properties:
   "timestamp": "{request.body.timestamp}",
   "ip_address": "{request.body.ip_address}",
   "user_agent": "{request.body.user_agent}",
+  "is_bot": "{request.body.is_bot}",
+  "bot_session_ip": "{request.body.bot_session_ip}",
+  "bot_session_ua": "{request.body.bot_session_ua}",
   "$source_url": "email",
   "subscriber_id": "{request.body.subscriber_id}"
 }
 ```
 
-### Bot Trap Webhook Configuration
-
-Create a **separate webhook** in PostHog for the bot trap events. This marks individual events (not users) as bot activity:
-
-```json
-{
-  "event": "bot_trap_triggered",
-  "distinct_id": "{request.body.subscriber_id}",
-  "$lib": "newsletter-pixel",
-  "email": "{request.body.email}",
-  "post_id": "{request.body.post_id}",
-  "timestamp": "{request.body.timestamp}",
-  "ip_address": "{request.body.ip_address}",
-  "user_agent": "{request.body.user_agent}",
-  "is_bot": true,
-  "bot_session_ip": "{request.body.bot_session_ip}",
-  "bot_session_ua": "{request.body.bot_session_ua}",
-  "subscriber_id": "{request.body.subscriber_id}"
-}
-```
-
-Note: We intentionally do NOT use `$set` here. This keeps `is_bot` as an event property only, so legitimate opens from the same subscriber are still tracked normally.
+This creates two distinct events in PostHog:
+- **email_opened** - Legitimate tracking pixel loads
+- **bot_trap_triggered** - Bot clicks on the honeypot link (with `is_bot: true`)
 
 ### Filtering Bots in PostHog
 

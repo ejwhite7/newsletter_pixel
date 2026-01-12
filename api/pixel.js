@@ -66,6 +66,7 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      event_type: 'email_opened',
       email: sanitizedEmail,
       subscriber_id: sanitizedSubscriberId,
       post_id: sanitizedPostId,
