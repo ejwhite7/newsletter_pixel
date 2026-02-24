@@ -7,6 +7,61 @@ const PIXEL = Buffer.from(
 // Security: Use environment variable for webhook URL
 const POSTHOG_WEBHOOK = process.env.POSTHOG_WEBHOOK_URL;
 
+// Known email security scanners and image proxy User-Agent patterns
+const KNOWN_PROXY_PATTERNS = [
+  'GoogleImageProxy',
+  'YahooMailProxy',
+  'YahooCacheSystem',
+  'Outlook-iOS',
+  'Outlook-Android',
+  'Microsoft Office',
+  'ms-office',
+  'Barracuda',
+  'Mimecast',
+  'Proofpoint',
+  'FireEye',
+  'ZScaler',
+  'Symantec',
+  'MessageLabs',
+  'Cisco IronPort',
+  'Sophos',
+  'Trend Micro',
+  'FortiGuard',
+  'Websense',
+  'SpamAssassin',
+];
+
+// Check if the request has prefetch/preview headers
+function isPrefetch(headers) {
+  const purpose = headers['purpose'] || headers['x-purpose'] || headers['sec-purpose'] || '';
+  const mozPrefetch = headers['x-moz'] || '';
+  return /prefetch|preview/i.test(purpose) || /prefetch/i.test(mozPrefetch);
+}
+
+// Check if the User-Agent matches a known email proxy or security scanner
+function matchKnownProxy(userAgent) {
+  if (!userAgent || typeof userAgent !== 'string') return null;
+  const ua = userAgent.toLowerCase();
+  for (const pattern of KNOWN_PROXY_PATTERNS) {
+    if (ua.includes(pattern.toLowerCase())) return pattern;
+  }
+  return null;
+}
+
+// Heuristic: flag suspiciously short or generic User-Agents
+function isUserAgentSuspicious(userAgent) {
+  if (!userAgent || typeof userAgent !== 'string') return true;
+  // Very short UAs are unusual for real email clients
+  if (userAgent.length < 20) return true;
+  // Generic single-token UAs like "Mozilla/5.0" with no platform detail
+  if (/^Mozilla\/[\d.]+$/.test(userAgent.trim())) return true;
+  // Missing typical browser/platform tokens
+  const hasOSToken = /Windows|Macintosh|Linux|Android|iPhone|iPad/i.test(userAgent);
+  const hasClientToken = /AppleWebKit|Gecko|Chrome|Safari|Outlook|Thunderbird/i.test(userAgent);
+  if (!hasOSToken && !hasClientToken) return true;
+  return false;
+}
+
 // Input sanitization - strip potentially dangerous characters and limit length
 function sanitizeInput(input, maxLength = 255) {
   if (!input || typeof input !== 'string') return 'unknown';
@@ -79,6 +134,13 @@ export default async function handler(req, res) {
     ? sanitizeInput(forwardedFor.split(',')[0], 45)
     : sanitizeInput(req.connection?.remoteAddress, 45);
 
+  // Detect spam filter / email security scanner signals
+  const userAgent = sanitizeInput(req.headers['user-agent'], 500);
+  const prefetch = isPrefetch(req.headers);
+  const proxyMatch = matchKnownProxy(req.headers['user-agent']);
+  const suspiciousUA = isUserAgentSuspicious(req.headers['user-agent']);
+  const likelySpamFilter = prefetch || !!proxyMatch || suspiciousUA;
+
   // Send to PostHog in background (don't await to avoid blocking response)
   fetch(POSTHOG_WEBHOOK, {
     method: 'POST',
@@ -91,8 +153,13 @@ export default async function handler(req, res) {
       subscriber_id: sanitizedSubscriberId,
       post_id: sanitizedPostId,
       timestamp: new Date().toISOString(),
-      user_agent: sanitizeInput(req.headers['user-agent'], 500),
-      ip_address: ipAddress
+      user_agent: userAgent,
+      ip_address: ipAddress,
+      // Spam filter detection signals
+      is_prefetch: prefetch,
+      known_proxy: proxyMatch,
+      suspicious_user_agent: suspiciousUA,
+      likely_spam_filter: likelySpamFilter,
     })
   }).catch(error => {
     console.error('PostHog webhook error:', error.message);
