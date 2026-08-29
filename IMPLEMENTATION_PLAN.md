@@ -56,6 +56,7 @@ This file is the execution source of truth. Each iteration takes the first ready
 - [x] GATE-003 Security: no unresolved critical, high, or medium finding; exposed historical webhook is confirmed rotated.
   - Evidence: independent follow-up adversarial review passed with no critical/high/medium findings; the configured Vercel webhook differs from the historical exposed credential, confirming rotation without disclosing either value.
 - [ ] GATE-004 Production: exact reviewed artifact promoted, smoke-tested, observed, and rollback target recorded.
+  - Preflight: current rollback target is `dpl_FoGh4PCdk6AnfGCaFQS4LTuVeoji`. Production currently has a webhook destination but no tracking-token secret or time-bounded legacy configuration, so promotion must wait for an explicit signed-token rollout or migration cutoff to avoid silently dropping active unsigned campaign events.
 
 ## Completion signal
 
