@@ -51,7 +51,8 @@ This file is the execution source of truth. Each iteration takes the first ready
 
 - [x] GATE-001 Local quality: two consecutive clean `npm run check` runs, `git diff --check`, dependency audit, secret scan, and final diff review.
   - Evidence: two consecutive 25/25 test-and-syntax runs, zero production dependency vulnerabilities, clean diff check, tracked-tree credential scan, and independent final review.
-- [ ] GATE-002 Preview: real Vercel preview verifies image bytes, signed delivery, rejection paths, retry behavior, and logs.
+- [x] GATE-002 Preview: real Vercel preview verifies image bytes, signed delivery, rejection paths, retry behavior, and logs.
+  - Evidence: deployment `dpl_8KPCmMRBzP6ct3Kv9asoP75tnrFL` returned HTTP 200 with the exact 70-byte 1x1 PNG; delivered one signed `email_opened` v1 event with an idempotency header; retried a forced 503 exactly once with the same key; emitted no event for unsigned or tampered requests; logs exposed no subscriber data, token, or webhook URL.
 - [x] GATE-003 Security: no unresolved critical, high, or medium finding; exposed historical webhook is confirmed rotated.
   - Evidence: independent follow-up adversarial review passed with no critical/high/medium findings; the configured Vercel webhook differs from the historical exposed credential, confirming rotation without disclosing either value.
 - [ ] GATE-004 Production: exact reviewed artifact promoted, smoke-tested, observed, and rollback target recorded.
