@@ -354,7 +354,7 @@ const html = `<!DOCTYPE html>
           </div>
           <div class="code-content">
             <pre><span class="comment">&lt;!-- Add this anywhere in your email HTML --&gt;</span>
-<span class="tag">&lt;img</span> <span class="attr">src</span>=<span class="value">"https://your-app.vercel.app/api/pixel?email={{email}}&amp;subscriber_id={{subscriber_id}}&amp;post_id={{post_id}}"</span>
+<span class="tag">&lt;img</span> <span class="attr">src</span>=<span class="value">"https://your-app.vercel.app/api/pixel?t={{tracking_token}}"</span>
      <span class="attr">width</span>=<span class="value">"1"</span> <span class="attr">height</span>=<span class="value">"1"</span> <span class="attr">alt</span>=<span class="value">""</span>
      <span class="attr">style</span>=<span class="value">"display:block;border:0;opacity:0;"</span> <span class="tag">/&gt;</span></pre>
           </div>
@@ -372,7 +372,7 @@ const html = `<!DOCTYPE html>
             <div class="step-number">1</div>
             <div class="step-content">
               <h3>Deploy to Vercel</h3>
-              <p>Click the deploy button or clone the repo. Set your <code>POSTHOG_WEBHOOK_URL</code> environment variable in Vercel's dashboard.</p>
+              <p>Click the deploy button or clone the repo. Set <code>POSTHOG_WEBHOOK_URL</code> and a strong <code>TRACKING_TOKEN_SECRET</code> in Vercel.</p>
             </div>
           </div>
           <div class="step">
@@ -386,7 +386,7 @@ const html = `<!DOCTYPE html>
             <div class="step-number">3</div>
             <div class="step-content">
               <h3>Add to Your Emails</h3>
-              <p>Insert the tracking pixel HTML snippet into your newsletter template. Use your platform's merge tags for dynamic values.</p>
+              <p>Generate signed tracking tokens upstream, store them in a provider custom field, and insert the token merge tag into your template.</p>
             </div>
           </div>
         </div>
@@ -411,4 +411,3 @@ export default function handler(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.status(200).send(html);
 }
-

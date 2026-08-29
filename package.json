@@ -1,6 +1,7 @@
 {
   "name": "newsletter-pixel",
   "version": "1.0.0",
+  "type": "module",
   "description": "A simple, privacy-focused email tracking pixel service that forwards email open events to PostHog or any webhook endpoint",
   "main": "api/pixel.js",
   "keywords": [
@@ -26,12 +27,15 @@
   "author": "Your Name <your.email@example.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "vercel dev",
     "deploy": "vercel --prod",
-    "test": "node test.js"
+    "test": "node --test test/*.test.js",
+    "check": "npm test && node --check api/index.js && node --check api/pixel.js && node --check api/bot-trap.js",
+    "token": "node --env-file-if-exists=.env.local scripts/create-tracking-token.js",
+    "token:batch": "node --env-file-if-exists=.env.local scripts/create-tracking-token-batch.js"
   },
-  "dependencies": {},
-  "devDependencies": {},
+  "dependencies": {
+    "@vercel/functions": "^3.3.3"
+  },
   "engines": {
     "node": "22.x"
   }
