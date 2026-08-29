@@ -1,140 +1,140 @@
 # Newsletter Tracking Pixel
 
-A simple, privacy-focused email tracking pixel service that forwards email open events to PostHog or any webhook endpoint. Perfect for tracking newsletter engagement without vendor lock-in.
+A small Vercel service that returns an email tracking pixel immediately and forwards authenticated open events to PostHog or another webhook.
 
-## Why Track Email Opens?
+## Security model
 
-By tracking which subscribers are opening your emails, you can:
+Tracking URLs contain an encrypted, authenticated token instead of raw subscriber data. Each token is bound to either the pixel or bot-trap endpoint and has an expiry time. Modified, expired, malformed, unsigned, or endpoint-swapped tokens still receive the transparent image but do not generate analytics events.
 
-- **Assess subscriber value** - Identify your most engaged readers who consistently open emails
-- **Improve targeting** - Send special content or offers to highly engaged subscribers
-- **Clean your list** - Remove inactive subscribers to improve deliverability rates
-- **Optimize send times** - Analyze when your most valuable subscribers are most active
-- **Measure content performance** - See which newsletter topics drive the highest engagement
-- **Segment audiences** - Create cohorts based on engagement patterns for personalized campaigns
+Webhook delivery runs through Vercel `waitUntil()`, checks HTTP status codes, times out slow requests, and retries bounded transient failures.
 
-Understanding subscriber engagement helps you focus on readers who find real value in your content, leading to better retention and monetization opportunities.
+## Deploy
 
-**Break free from platform lock-in**: While email platforms provide basic open tracking, this critical engagement data is typically locked inside their systems. By tracking opens in PostHog, you can:
+1. Deploy this repository to Vercel.
+2. Configure these environment variables for the target environment:
 
-- **Export to CRM systems** - Sync engaged subscriber lists to HubSpot, Salesforce, or other CRMs
-- **Power ad platforms** - Create lookalike audiences on Facebook, Google Ads based on engaged subscribers
-- **Feed analytics tools** - Combine email engagement with website analytics for complete customer journey tracking
-- **Build custom audiences** - Use engagement data in any third-party tool that accepts PostHog data
-- **Own your data** - Never lose access to subscriber engagement history if you switch email platforms
+   | Variable | Required | Description |
+   |---|---:|---|
+   | `POSTHOG_WEBHOOK_URL` | Yes | HTTPS destination for event payloads |
+   | `TRACKING_TOKEN_SECRET` | Yes | At least 32 random bytes used to encrypt and authenticate tokens |
+   | `TRACKING_TOKEN_SECRET_PREVIOUS` | No | Previous secret during a controlled rotation |
+   | `ALLOW_UNSIGNED_TRACKING` | No | Temporary migration flag; secure default is `false` |
+   | `UNSIGNED_TRACKING_EXPIRES_AT` | With legacy mode | ISO timestamp after which unsigned delivery stops automatically |
 
-## Features
+3. Generate a secret without committing or printing it in logs:
 
-- 🎯 **1x1 transparent tracking pixel** - Invisible in emails
-- 📊 **PostHog integration** - Forward events to PostHog webhooks
-- 🚀 **Zero maintenance** - Deploy once on Vercel
-- 🔧 **Newsletter platform agnostic** - Works with any email service
-- 📧 **Beehiiv ready** - Pre-configured merge tags
-- ⚡ **Fast response** - Returns pixel immediately, processes webhook async
-- 🤖 **Bot detection honeypot** - Identify and filter out bot clicks from analytics
+   ```bash
+   openssl rand -base64 32
+   ```
 
-## Quick Start
+4. Store the secret in Vercel-managed environment variables and redeploy.
 
-### 1. Deploy to Vercel
+Never reuse a secret that has appeared in source control.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ejwhite7/newsletter_pixel)
+## Generate tracking tokens
 
-Or manually:
+For a single token during local testing:
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/newsletter-pixel.git
-cd newsletter-pixel
-npm install -g vercel
-vercel --prod
+npm run token -- pixel alice@example.com subscriber-123 campaign-456 90
 ```
 
-### 2. Configure Your Webhook
+Arguments are:
 
-Set the `POSTHOG_WEBHOOK_URL` environment variable in your Vercel dashboard:
+```text
+<pixel|bot> <email> <subscriber_id> <post_id> [ttl_days]
+```
 
-1. Go to your Vercel project → Settings → Environment Variables
-2. Add `POSTHOG_WEBHOOK_URL` with your PostHog webhook URL:
-   ```
-   https://webhooks.us.posthog.com/public/webhooks/YOUR-WEBHOOK-ID
-   ```
-3. Redeploy for changes to take effect
+The token generator accepts provider identifiers as bounded opaque strings. Beehiiv UUIDs, Mailchimp identifiers, and ConvertKit numeric IDs are supported.
 
-### 3. Add to Your Newsletter
+For newsletters, generate tokens upstream and populate provider custom fields such as `tracking_token` and `bot_tracking_token`. Newsletter templates must not attempt to calculate the token in the email client.
 
-Add this HTML to your email template:
+For a batch export, provide newline-delimited JSON records:
+
+```bash
+npm run token:batch -- 90 < recipients.ndjson > tokens.ndjson
+```
+
+Each input record requires `email`, `subscriber_id`, and `post_id`. Each output record preserves those fields and adds `tracking_token` and `bot_tracking_token` for import into provider custom fields. The command stops at the first invalid record and reports only its line number.
+
+## Email integration
+
+Pixel:
 
 ```html
-<img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email={{email}}&subscriber_id={{subscriber_id}}&post_id={{post_id}}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
+<img src="https://YOUR-DEPLOYMENT.vercel.app/api/pixel?t={{tracking_token}}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
 ```
 
-## Newsletter Platform Integration
-
-### Beehiiv
-
-Use these merge tags in your HTML snippet. Add this as an HTML Snippet in beehiiv with visibility set to "Hide on Desktop" to prevent it from appearing in web posts:
+Bot-trap link:
 
 ```html
-<img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email={{email}}&subscriber_id={{subscriber_id}}&post_id={{resource_id}}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
+<a href="https://YOUR-DEPLOYMENT.vercel.app/api/bot-trap?t={{bot_tracking_token}}" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
 ```
 
-### Mailchimp
+Generate pixel and bot tokens separately. A pixel token cannot be used on the bot endpoint.
 
-```html
-<img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email=*|EMAIL|*&subscriber_id=*|UNIQID|*&post_id=*|CAMPAIGN_UID|*" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
+### Provider contract
+
+Before sending a campaign:
+
+1. Export or obtain each recipient's email and provider subscriber ID.
+2. Generate one `pixel` token and, if used, one `bot` token for the campaign/post ID.
+3. Store the values in provider custom fields.
+4. Reference the custom fields in the provider's HTML template syntax.
+5. Send a provider test message and confirm one event in a nonproduction webhook destination.
+
+The exact custom-field import and merge-tag syntax varies by provider. Token values use base64url and therefore do not contain query-string `+`, `&`, or `=` characters.
+
+## Legacy migration
+
+Unsigned query parameters are disabled by default. If already-scheduled campaigns still use the old URL contract, temporarily set both values:
+
+```text
+ALLOW_UNSIGNED_TRACKING=true
+UNSIGNED_TRACKING_EXPIRES_AT=2026-09-15T00:00:00Z
 ```
 
-### ConvertKit
+Legacy mode accepts bounded non-placeholder email, subscriber, and post values, including numeric IDs. It does not prevent event forgery. The handler automatically disables legacy delivery at the configured timestamp. After migration, set the flag to `false` and remove the expiry; old URLs will continue returning a transparent image but will no longer forward events.
 
-```html
-<img src="https://YOUR-DEPLOYMENT-URL.vercel.app/api/pixel?email={{ subscriber.email_address }}&subscriber_id={{ subscriber.id }}&post_id={{ broadcast.id }}" width="1" height="1" alt="" style="display:block;border:0;opacity:0;" />
+## Event payloads
+
+Every event contains:
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "email_opened",
+  "email": "alice@example.com",
+  "subscriber_id": "subscriber-123",
+  "post_id": "campaign-456",
+  "timestamp": "2026-01-01T00:00:00.000Z",
+  "user_agent": "mail client user agent",
+  "ip_address": "203.0.113.10",
+  "tracking_version": "v1"
+}
 ```
 
-## Bot Detection Honeypot
+Pixel events also contain:
 
-Many email security scanners and bots automatically click every link in an email before delivering it. This inflates your analytics with fake engagement. The honeypot endpoint catches these bots by using an invisible link that real users cannot see or click.
-
-### How It Works
-
-1. Add an invisible link to your email template pointing to `/api/bot-trap`
-2. Real users never see or click it (it's hidden with CSS)
-3. Bots programmed to click all links will trigger the trap
-4. The endpoint sends a `bot_trap_triggered` event to PostHog with `is_bot: true`
-5. Filter these subscribers from your analytics to get accurate engagement data
-
-### Adding the Honeypot Link
-
-Add this invisible link to your email template alongside your tracking pixel:
-
-**Beehiiv:**
-```html
-<a href="https://YOUR-DEPLOYMENT-URL.vercel.app/api/bot-trap?email={{email}}&subscriber_id={{subscriber_id}}&post_id={{resource_id}}" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
+```json
+{
+  "client_family": "outlook_ios",
+  "is_image_proxy": false,
+  "image_proxy": null,
+  "is_prefetch": false,
+  "scanner_vendor": null,
+  "suspicious_user_agent": false,
+  "automation_confidence": "none",
+  "known_proxy": null,
+  "likely_spam_filter": false
+}
 ```
 
-**Mailchimp:**
-```html
-<a href="https://YOUR-DEPLOYMENT-URL.vercel.app/api/bot-trap?email=*|EMAIL|*&subscriber_id=*|UNIQID|*&post_id=*|CAMPAIGN_UID|*" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
-```
+Bot-trap events use `event_type: "bot_trap_triggered"` and include `is_bot`, `bot_session_ip`, and `bot_session_ua`.
 
-**ConvertKit:**
-```html
-<a href="https://YOUR-DEPLOYMENT-URL.vercel.app/api/bot-trap?email={{ subscriber.email_address }}&subscriber_id={{ subscriber.id }}&post_id={{ broadcast.id }}" style="display:none;visibility:hidden;width:0;height:0;overflow:hidden;position:absolute;">Verify subscription</a>
-```
+### PostHog webhook mapping
 
-### Best Practices
-
-- Use boring text like "Verify subscription" that bots targeting verification links will click
-- Never use text like "Don't click this" - curious humans might click it
-- Test in Gmail, Outlook, and Apple Mail to ensure the link is truly invisible
-- Place the link early in the email (bots often process links in order)
-
-## PostHog Webhook Configuration
-
-A single webhook handles both email opens and bot trap events. The `event_type` field differentiates them:
-
-- `email_opened` - From the tracking pixel
-- `bot_trap_triggered` - From the honeypot link
-
-In your PostHog webhook settings, use this configuration:
+Map all request properties that you intend to analyze. A complete mapping is:
 
 ```json
 {
@@ -145,140 +145,65 @@ In your PostHog webhook settings, use this configuration:
     "email": "{request.body.email}",
     "subscriber_id": "{request.body.subscriber_id}"
   },
+  "$insert_id": "{request.body.event_id}",
   "email": "{request.body.email}",
+  "subscriber_id": "{request.body.subscriber_id}",
   "post_id": "{request.body.post_id}",
-  "$set_once": {
-    "first_email_open": "{request.body.timestamp}"
-  },
   "timestamp": "{request.body.timestamp}",
+  "tracking_version": "{request.body.tracking_version}",
   "ip_address": "{request.body.ip_address}",
   "user_agent": "{request.body.user_agent}",
+  "client_family": "{request.body.client_family}",
+  "is_image_proxy": "{request.body.is_image_proxy}",
+  "image_proxy": "{request.body.image_proxy}",
+  "is_prefetch": "{request.body.is_prefetch}",
+  "scanner_vendor": "{request.body.scanner_vendor}",
+  "suspicious_user_agent": "{request.body.suspicious_user_agent}",
+  "automation_confidence": "{request.body.automation_confidence}",
+  "known_proxy": "{request.body.known_proxy}",
+  "likely_spam_filter": "{request.body.likely_spam_filter}",
   "is_bot": "{request.body.is_bot}",
   "bot_session_ip": "{request.body.bot_session_ip}",
-  "bot_session_ua": "{request.body.bot_session_ua}",
-  "$source_url": "email",
-  "subscriber_id": "{request.body.subscriber_id}"
+  "bot_session_ua": "{request.body.bot_session_ua}"
 }
 ```
 
-This creates two distinct events in PostHog:
-- **email_opened** - Legitimate tracking pixel loads
-- **bot_trap_triggered** - Bot clicks on the honeypot link (with `is_bot: true`)
+`is_image_proxy` does not mean spam. Gmail and Yahoo proxy legitimate opens. `automation_confidence` is evidence, not certainty. Use explicit scanner or prefetch signals alongside campaign timing before suppressing engagement.
 
-### Filtering Bots in PostHog
+`$insert_id` makes bounded delivery retries idempotent in PostHog. The service also suppresses immediate duplicate loads of the same signed token within one warm function instance and assigns a stable five-minute event ID bucket. Repeated opens outside that bucket remain measurable.
 
-Filter bot events from your analytics without excluding the entire subscriber:
-
-**In Insights/Dashboards:**
-- For email open events: No filter needed (bot trap uses a separate event name)
-- To explicitly exclude: Filter `event` → `does not equal` → `bot_trap_triggered`
-
-**Cross-referencing Bot Sessions:**
-The `bot_session_ip` and `bot_session_ua` properties let you identify if other events came from the same bot session. Create an insight to find email opens that share IP/user-agent with bot trap events.
-
-**Viewing Bot Activity:**
-Create a separate insight to monitor bot activity:
-- Filter: `event` → `equals` → `bot_trap_triggered`
-- This helps you understand how many bots are targeting your emails
-
-## Data Captured
-
-Each pixel load captures:
-
-- **email** - Subscriber email address
-- **subscriber_id** - Unique subscriber identifier
-- **post_id** - Newsletter/campaign identifier
-- **timestamp** - ISO timestamp of pixel load
-- **user_agent** - Email client information
-- **ip_address** - Subscriber IP (for geolocation)
-
-## Customization
-
-### Change Webhook Endpoint
-
-Edit `api/pixel.js`:
-
-```javascript
-const WEBHOOK_URL = 'https://your-webhook-endpoint.com/webhook';
-```
-
-### Add Custom Data
-
-Modify the payload in `api/pixel.js`:
-
-```javascript
-body: JSON.stringify({
-  email: email || 'unknown',
-  subscriber_id: subscriber_id || 'unknown',
-  post_id: post_id || 'unknown',
-  timestamp: new Date().toISOString(),
-  user_agent: req.headers['user-agent'] || 'unknown',
-  ip_address: req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown',
-  // Add your custom fields here
-  campaign_name: req.query.campaign_name,
-  list_id: req.query.list_id
-})
-```
-
-### Environment Variables
-
-The following environment variable is **required**:
-
-| Variable | Description |
-|----------|-------------|
-| `POSTHOG_WEBHOOK_URL` | Your PostHog webhook endpoint URL |
-
-Set this in Vercel's dashboard under Settings → Environment Variables.
-
-## Privacy & GDPR
-
-- This service tracks email opens
-- Ensure your privacy policy covers email tracking
-- Consider providing opt-out mechanisms
-- IP addresses are collected for geolocation
-
-## Limitations
-
-- Some email clients (Gmail) proxy/cache images, affecting accuracy
-- Privacy-focused clients may block image loading
-- Not all email opens will be tracked (expected ~70-85% accuracy)
-
-## Development
+## Local development
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/newsletter-pixel.git
-cd newsletter-pixel
+npm install
+cp .env.example .env.local
 vercel dev
 ```
 
-Test the tracking pixel locally:
-```
-http://localhost:3000/api/pixel?email=test@example.com&subscriber_id=123&post_id=456
+Create a token, then request:
+
+```text
+http://localhost:3000/api/pixel?t=TOKEN
 ```
 
-Test the bot trap locally:
-```
-http://localhost:3000/api/bot-trap?email=test@example.com&subscriber_id=123&post_id=456
+Token commands automatically load the ignored `.env.local` file when it exists. You can instead export `TRACKING_TOKEN_SECRET` from an approved secret manager. Do not place the literal secret in a command that will be stored in shell history.
+
+Run the complete local quality gate:
+
+```bash
+npm run check
+npm audit --omit=dev
+git diff --check
 ```
 
-## Contributing
+## Privacy and limitations
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+- The encrypted URL token prevents subscriber email addresses from appearing as plaintext in URLs.
+- Event payloads still contain subscriber email and IP address. Configure access, retention, consent, and deletion practices accordingly.
+- Image proxies and privacy-focused mail clients limit the accuracy of open tracking.
+- Do not treat a missing open as proof that a subscriber did not read an email.
+- Do not permanently classify a subscriber as a bot based on one request.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Support
-
-- 🐛 **Issues**: [GitHub Issues](https://github.com/YOUR-USERNAME/newsletter-pixel/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/YOUR-USERNAME/newsletter-pixel/discussions)
-- 📧 **Email**: Create an issue for support
-
----
-
-Made with ❤️ for newsletter creators who want simple, reliable email tracking.
+MIT. See [LICENSE](LICENSE).
